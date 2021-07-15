@@ -1,5 +1,5 @@
-import numpy as np
-
+import sys
+import turtle
 
 class Node:
     def __init__(self, row, col, value):
@@ -16,12 +16,14 @@ row_number, col_number = map(int, input().split())
 
 # initializing an empty matrix
 matrix = []
+temp_matrix = []
 # taking 2x2 matrix from the user
 for i in range(row_number):
     # taking row input from the user
     row = list(input().split())
     # appending the 'row' to the 'matrix'
     matrix.append(row)
+    temp_matrix.append(row)
 
 # create 2d matrix for every node
 matrix_node = [[0 for i in range(row_number)] for i in range(col_number)]
@@ -43,7 +45,7 @@ def finish():
 
 
 # this method check that we in safe position or not
-def safe(selected):
+def safe():
     # this method check that last forwardchecking was safe or not
     for i in range(row_number):
         for j in range(col_number):
@@ -125,22 +127,83 @@ def first_constraint_propagation(selected, forwardchecking_list):
 def check_is_complete(selected, is_row):
     if is_row:
         for col in range(col_number):
-            if matrix_node[selected.row][col] == 8:
+            if matrix_node[selected.row][col].value == 8:
                 return False
         return True
-    else:
+    if not is_row:
         for row in range(row_number):
-            if matrix_node[row][selected.col] == 8:
+            if matrix_node[row][selected.col].value == 8:
                 return False
         return True
 
 
-#def second_constraint_propagation(selected, forwardchecking_list):
-   # if check_is_complete(selected, True):
-    #    for i in range(row_number):
-     #       if i != selected.row:
-      #          if (np_matrix[selected.row] == np_matrix[i]).all():
-       #             return False
+def check_is_complete_half(selected, row_or_col, is_row):
+    if is_row:
+        for col in range(col_number):
+            if col == selected.col:
+                if matrix_node[row_or_col][col].value != 8:
+                    return False
+            else:
+                if matrix_node[row_or_col][col].value != matrix_node[selected.row][col].value:
+                    return False
+        return True
+
+    if not is_row:
+        for row in range(row_number):
+            if row == selected.row:
+                if matrix_node[row][row_or_col].value != 8:
+                    return False
+            else:
+                if matrix_node[row][row_or_col].value != matrix_node[row][selected.col].value:
+                    return False
+        return True
+
+
+def second_constraint_propagation(selected, forwardchecking_list):
+    # check we have same row or not
+    check_row = check_is_complete(selected, True)
+    check_col = check_is_complete(selected, False)
+    if check_row:
+        for row in range(row_number):
+            counter_row = 0
+            if row != selected.row:
+                for col in range(col_number):
+                    if matrix_node[row][col].value == matrix_node[selected.row][col].value:
+                        counter_row += 1
+                    if counter_row == col_number:
+                        #print("second_row", row, col)
+                        return False
+    # check we have same col or not
+    if check_col:
+        for col in range(col_number):
+            counter_col = 0
+            if col != selected.col:
+                for row in range(row_number):
+                    if matrix_node[row][col].value == matrix_node[row][selected.col].value:
+                        counter_col += 1
+                    if counter_col == row_number:
+                        #print("second", row, col)
+                        return False
+
+    # forwardchecking for row
+    if check_row:
+        for row in range(row_number):
+            if row != selected.row:
+                if check_is_complete_half(selected, row, True):
+                    if selected.value in matrix_node[row][selected.col].dom:
+                        matrix_node[row][selected.col].remove(selected.value)
+                        forwardchecking_list.append(str(row)+","+str(selected.col)+","+selected.value)
+
+    # forwardchecking for row
+    if check_col:
+        for col in range(col_number):
+            if col != selected.col:
+                if check_is_complete_half(selected, col, False):
+                    if selected.value in matrix_node[selected.row][col].dom:
+                        matrix_node[selected.row][col].remove(selected.value)
+                        forwardchecking_list.append(str(selected.row) + "," + str(col) + "," + selected.value)
+
+    return True
 
 
 def third_constraint_propagation(selected, forwardchecking_list):
@@ -279,33 +342,54 @@ def add_remind_item(mac_list, mac_list_temp):
     for item in mac_list_temp:
         mac_list.append(item)
 
+
 def mac(selected):
     mac_list = []
     mac_list_temp = []
 
-    if not first_constraint_propagation(selected,mac_list_temp):
+    if not first_constraint_propagation(selected, mac_list_temp):
         list_undo_forward.append(mac_list_temp)
         return False
 
-    if not third_constraint_propagation(selected,mac_list_temp):
+    if not second_constraint_propagation(selected, mac_list_temp):
         list_undo_forward.append(mac_list_temp)
         return False
 
+    if not third_constraint_propagation(selected, mac_list_temp):
+        list_undo_forward.append(mac_list_temp)
+        return False
+
+    if not safe():
+        list_undo_forward.append(mac_list_temp)
+        return False
+
+    dom = selected.dom
+    number = selected.value
+    selected.value = 8
     while len(mac_list_temp) != 0:
         now_select_string = mac_list_temp.pop()
         split = now_select_string.split(",")
         if split[2] == "False":
             split[2] = '0'
-            now_select_string = split[0]+","+split[1]+","+split[2]
+            now_select_string = split[0] + "," + split[1] + "," + split[2]
         if split[2] == "True":
             split[2] = '1'
             now_select_string = split[0] + "," + split[1] + "," + split[2]
-        mac_list.append(now_select_string)
-        print("string", now_select_string)
+
         value = int(split[2])
         now_select = matrix_node[int(split[0])][int(split[1])]
+
+        if now_select.value != 8:
+            continue
+        print("string", now_select_string)
+        mac_list.append(now_select_string)
         now_select.value = not value
         if not first_constraint_propagation(now_select, mac_list_temp):
+            add_remind_item(mac_list, mac_list_temp)
+            now_select.value = 8
+            list_undo_forward.append(mac_list)
+            return False
+        if not second_constraint_propagation(now_select, mac_list_temp):
             add_remind_item(mac_list, mac_list_temp)
             now_select.value = 8
             list_undo_forward.append(mac_list)
@@ -317,7 +401,15 @@ def mac(selected):
             return False
 
         now_select.value = 8
+        if not safe():
+            add_remind_item(mac_list, mac_list_temp)
+            list_undo_forward.append(mac_list)
+            selected.dom = dom
+            selected.value = number
+            return False
 
+    selected.value = number
+    selected.dom = dom
     print("mac_list---->", mac_list)
     list_undo_forward.append(mac_list)
     return True
@@ -326,13 +418,13 @@ def mac(selected):
 def forwardchecking(selected):
     forwardchecking_list = []
     first_bool = first_constraint_propagation(selected, forwardchecking_list)
-    #second_bool = second_constraint_propagation(selected, forwardchecking_list)
+    second_bool = second_constraint_propagation(selected, forwardchecking_list)
     third_bool = third_constraint_propagation(selected, forwardchecking_list)
 
     print("forward checking =>", forwardchecking_list)
-    #print(second_bool)
+    print("second",second_bool)
     list_undo_forward.append(forwardchecking_list)
-    if first_bool and third_bool :
+    if first_bool and third_bool and second_bool:
         return True
     else:
         return False
@@ -371,9 +463,9 @@ def termianl_show(row, col):
     print('*****************************************************')
 
 
-def solve(selected_input):
+def solve():
     # return false if we have cell with empty domain
-    if not safe(selected_input):
+    if not safe():
         return False
     # if no empty cell return true
     if finish():
@@ -384,7 +476,7 @@ def solve(selected_input):
     for num in selected.dom:
         selected.value = num
         print(selected.row, selected.col)
-        print("bug--------------------->",  matrix_node[3][2].dom)
+        print("bug--------------------->", matrix_node[0][2].dom)
         termianl_show(selected.row, selected.col)
         print(list_undo_forward)
         #if not forwardchecking(selected):
@@ -393,7 +485,7 @@ def solve(selected_input):
             selected.value = 8
             undo_forwardchecking()
             continue
-        if solve(selected):
+        if solve():
             return True
 
         selected.value = 8
@@ -403,10 +495,118 @@ def solve(selected_input):
     return False
 
 
-selected_first = selection()
-solve(selected_first)
+#selected_first = selection()
+if not solve():
+    print("no way for this puzzle!!!:(")
+    end_screen = turtle.Screen()
+    pen = turtle.Turtle()
+    pen.hideturtle()
+    pen.speed(1)
+    pen.color("green")
+    pen.write("no way to solve this puzzle !!!", align="center", font=("candara", 24, "bold"))
+    end_screen.mainloop()
+    sys.exit()
 
 for i in range(row_number):
     for j in range(col_number):
         print(matrix_node[i][j].value, end=" ")
     print("\n")
+
+
+wn = turtle.Screen()
+wn.bgcolor("white")
+
+
+def draw_one(i,j,color):
+    one = turtle.Turtle()
+    one.color(color)
+    one.penup()
+    one.goto(-350 + j * (400 / ((row_number - 2) / 2 + 1)),350 - i * (400 / ((row_number - 2) / 2 + 1)))
+    one.width(3)
+    one.pendown()
+    one.right(90)
+    one.forward(20)
+    one.left(180)
+    one.forward(40)
+    one.left(135)
+    one.forward(15)
+    one.hideturtle()
+
+
+def draw_zero(i,j,color):
+    zero = turtle.Turtle()
+    zero.color(color)
+    zero.penup()
+    zero.goto(-350 + j * (400 / ((row_number - 2) / 2 + 1)),350 - i * (400 / ((row_number - 2) / 2 + 1)))
+    zero.pendown()
+    zero.shape("circle")
+    zero.shapesize(2,1.5,3)
+    zero.fillcolor("white")
+
+
+page = turtle.Turtle()
+page.speed(10)
+page.penup()
+first_row = 400
+
+
+for i in range(row_number - 1):
+    first_row -= (400 / ((row_number - 2) / 2 + 1))
+    page.goto(-400,first_row)
+    page.pendown()
+    page.forward(800)
+    page.penup()
+first_col = -400
+page.right(90)
+
+
+for i in range(col_number - 1):
+    first_col += (400 / ((row_number - 2) / 2 + 1))
+    page.goto(first_col,400)
+    page.pendown()
+    page.forward(800)
+    page.penup()
+page.hideturtle()
+
+
+for i in range(row_number):
+    for j in range(col_number):
+        if temp_matrix[i][j] == "8":
+            continue
+        else:
+            if temp_matrix[i][j] == "1":
+                draw_one(i,j,"red")
+            else:
+                draw_zero(i,j,"red")
+
+pen = turtle.Turtle()
+pen.hideturtle()
+pen.speed(1)
+pen.shape("square")
+pen.shapesize(0.5)
+pen.color("green")
+pen.penup()
+pen.goto(-550,300)
+pen.write("Start filling", align="center", font=("candara", 24, "bold"))
+pen.showturtle()
+
+
+for i in range(80):
+    pen.left(5)
+
+
+for i in range(row_number):
+    for j in range(col_number):
+        pen.left(10)
+        if temp_matrix[i][j] == "1" or temp_matrix[i][j] == "0":
+            continue
+        if matrix_node[i][j].value == 1:
+            draw_one(i,j,"green")
+        else:
+            draw_zero(i,j,"green")
+
+pen.hideturtle()
+pen.clear()
+pen.write("it's done", align="center", font=("candara", 24, "bold"))
+wn.mainloop()
+
